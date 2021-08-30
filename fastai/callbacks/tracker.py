@@ -1,10 +1,10 @@
 # Contribution from @fredguth, https://github.com/fredguth/fastai_playground.
 
-from fastai.torch_core import *
-from fastai.callback import *
-from fastai.basic_train import *
+from fastai_custom.torch_core import *
+from fastai_custom.callback import *
+from fastai_custom.basic_train import *
 
-__all__ = ['TerminateOnNaNCallback', 'EarlyStoppingCallback', 'SaveModelCallback', 'TrackerCallback',
+__all__ = ['TerminateOnNaNCallback', 'EarlyStoppingCallback', 'SaveModelCallback', 'SaveModelEachEpoch', 'TrackerCallback',
         'ReduceLROnPlateauCallback', 'TrackEpochCallback' ]
 
 class TerminateOnNaNCallback(Callback):
@@ -73,6 +73,35 @@ class EarlyStoppingCallback(TrackerCallback):
             if self.wait > self.patience:
                 print(f'Epoch {epoch}: early stopping')
                 return {"stop_training":True}
+
+class SaveModelEachEpoch(TrackerCallback):
+    "A `TrackerCallback` that saves the model when monitored quantity is best."
+    def __init__(self, learn:Learner, monitor:str='valid_loss', mode:str='auto', every:str='improvement', name:str='bestmodel',
+                 num_epochs_head=0, save_frequency:int=1):
+        super().__init__(learn, monitor=monitor, mode=mode)
+        self.every,self.name = every,name
+        self.num_epochs_head = num_epochs_head
+        self.save_frequency = save_frequency
+        if self.every not in ['improvement', 'epoch']:
+            warn(f'SaveModel every {self.every} is invalid, falling back to "improvement".')
+            self.every = 'improvement'       
+    def jump_to_epoch(self, epoch:int)->None:
+        try: 
+            self.learn.load(f'{self.name}_{epoch-1}', purge=False)
+            print(f"Loaded {self.name}_{epoch-1}")
+        except: print(f'Model {self.name}_{epoch-1} not found.')
+
+    def on_epoch_end(self, epoch:int, **kwargs:Any)->None:
+        "Compare the value monitored to its best score and maybe save the model."
+        if self.every=="epoch": self.learn.save(f'{self.name}_{epoch}')
+        else: #every="improvement"
+            current = self.get_monitor_value()
+            if current is not None and self.operator(current, self.best):
+                print(f'Better model found at epoch {epoch + self.num_epochs_head} with {self.monitor} value: {current}.')
+                self.best = current
+                self.learn.save_good(f'{self.name}')
+            if current is not None and (epoch + self.num_epochs_head) % self.save_frequency == 0:
+                self.learn.save_good(f'ckpt_epoch_{epoch + self.num_epochs_head}')
 
 class SaveModelCallback(TrackerCallback):
     "A `TrackerCallback` that saves the model when monitored quantity is best."

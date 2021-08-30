@@ -7,7 +7,7 @@ from .utils.ipython import gpu_mem_restore
 import inspect
 from fastprogress.fastprogress import format_time, IN_NOTEBOOK
 from time import time
-from fastai.sixel import plot_sixel
+from .sixel import plot_sixel
 
 __all__ = ['Learner', 'LearnerCallback', 'Recorder', 'RecordOnCPU', 'fit', 'loss_batch', 'train_epoch', 'validate',
            'get_preds', 'load_learner']
@@ -252,6 +252,35 @@ class Learner():
         if not hasattr(self, 'opt'): with_opt=False
         if not with_opt: state = get_model(self.model).state_dict()
         else: state = {'model': get_model(self.model).state_dict(), 'opt':self.opt.state_dict()}
+        torch.save(state, target)
+        if return_path: return target
+
+    def save_good(self, file:PathLikeOrBinaryStream=None, return_path:bool=False, with_opt:bool=True):
+        "Save model and optimizer state (if `with_opt`) with `file` to `self.model_dir`. `file` can be file-like (file or buffer). Converts layer names"
+        convert_name_dict = {
+                            "0.0": "conv1",
+                            "0.1":"bn1",
+                            "0.4": "layer1",
+                            "0.5": "layer2",
+                            "0.6": "layer3",
+                            "0.7": "layer4",
+                            "1.1": "fc"
+                        }
+        if is_pathlike(file): self._test_writeable_path()
+        if rank_distrib(): return # don't save if slave proc
+        target = self.path/self.model_dir/f'{file}.pth' if is_pathlike(file) else file
+        if not hasattr(self, 'opt'): with_opt=False
+
+        state_dict = get_model(self.model).state_dict()
+        for k in list(state_dict.keys()):
+            for key in convert_name_dict:
+                if k.startswith(key):
+                    state_dict[k.replace(key, convert_name_dict[key])] = state_dict[k]
+                    del state_dict[k]
+        del state_dict['fc.weight']
+        
+        if not with_opt: state = state_dict
+        else: state = {'state_dict': state_dict, 'opt':self.opt.state_dict()}
         torch.save(state, target)
         if return_path: return target
 
