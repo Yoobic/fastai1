@@ -1,8 +1,8 @@
 # Contribution from @fredguth, https://github.com/fredguth/fastai_playground.
 
-from fastai_custom.torch_core import *
-from fastai_custom.callback import *
-from fastai_custom.basic_train import *
+from fastai.torch_core import *
+from fastai.callback import *
+from fastai.basic_train import *
 
 __all__ = ['TerminateOnNaNCallback', 'EarlyStoppingCallback', 'SaveModelCallback', 'SaveModelEachEpoch', 'TrackerCallback',
         'ReduceLROnPlateauCallback', 'TrackEpochCallback' ]
